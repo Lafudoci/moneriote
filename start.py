@@ -4,7 +4,7 @@ from time import sleep
 
 import json
 import re
-import GeoIP  # Bad news if you're running this on windows without devel packages
+import pygeoip
 import requests
 import subprocess
 
@@ -21,7 +21,7 @@ dnsApiZone = 'nodes.viaxmr.com.'  # the dns zone that we'll use
 dnsApiEnd = 'http://ns1.lchimp.com:8081/api/v1/servers/localhost/zones/'  # the zone's end point on the api server
 dnsApiKey = ''  # this is your powerdns API key set in the server config
 
-gi = GeoIP.open('./GeoIP.dat', GeoIP.GEOIP_MEMORY_CACHE)
+gi = pygeoip.GeoIP('./GeoIP.dat', pygeoip.GEOIP_STANDARD)
 currentNodes = []
 
 '''
