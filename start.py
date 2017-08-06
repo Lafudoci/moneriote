@@ -4,7 +4,7 @@ from time import sleep
 
 import json
 import re
-import pygeoip
+import geoip2.database
 import requests
 import subprocess
 
@@ -21,7 +21,7 @@ dnsApiZone = 'nodes.viaxmr.com.'  # the dns zone that we'll use
 dnsApiEnd = 'http://ns1.lchimp.com:8081/api/v1/servers/localhost/zones/'  # the zone's end point on the api server
 dnsApiKey = ''  # this is your powerdns API key set in the server config
 
-gi = pygeoip.GeoIP('./GeoIP.dat', pygeoip.GEOIP_STANDARD)
+gi = geoip2.database.Reader('./GeoLite2-Country.mmdb')
 currentNodes = []
 
 '''
@@ -92,8 +92,8 @@ def scan_node(address, accepted_height):
     block_height_diff = int(node_height_json['height']) - accepted_height
 
     # Check if the node we're checking is up to date (with a little buffer)
-    if block_height_diff >= acceptableBlockOffset or block_height_diff <= (
-                acceptableBlockOffset * -1) and address in currentNodes:
+    if (block_height_diff >= acceptableBlockOffset or block_height_diff <= (acceptableBlockOffset * -1)) \
+            and address in currentNodes:
         currentNodes.remove(address)
     elif address not in currentNodes:
         currentNodes.append(address)
@@ -152,12 +152,11 @@ def update_dns_records():
     dns_nodes = []
 
     for node in currentNodes:
-        county_code = gi.country_code_by_addr(node)
-        region_code = GeoIP.country_continents[county_code]
+        geo_lookup = gi.country(node)
         dns_nodes.append({"content": node, "disabled": False})
-        dns_geo_nodes[region_code].append({"content": node, "disabled": False})
+        dns_geo_nodes[geo_lookup.continent.code].append({"content": node, "disabled": False})
 
-    jsonData = {
+    json_data = {
         "rrsets": [
             {
                 "name": "nodes.viaxmr.com.",
@@ -170,7 +169,7 @@ def update_dns_records():
     }
 
     for region, nodes in dns_geo_nodes.iteritems():
-        jsonData["rrsets"].append(
+        json_data["rrsets"].append(
             {
                 "name": region + ".nodes.viaxmr.com.",
                 "type": "A",
@@ -179,7 +178,7 @@ def update_dns_records():
                 "records": nodes
             })
 
-    requests.patch(dnsApiEnd + dnsApiZone, json.dumps(jsonData), headers={'X-API-Key': dnsApiKey}, timeout=3)
+    requests.patch(dnsApiEnd + dnsApiZone, json.dumps(json_data), headers={'X-API-Key': dnsApiKey}, timeout=3)
 
 
 def check_all_nodes():

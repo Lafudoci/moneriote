@@ -25,4 +25,4 @@ The script re-scans existing nodes every 5 minutes as well as fetch new nodes fr
 * [pdns-server](https://repo.powerdns.com/)
 * GeoIP.dat ([GeoIP  County Lite](https://dev.maxmind.com/geoip/legacy/geolite/)) 
 * python [requests](https://pypi.python.org/pypi/requests/)
-* python [pygeoip](https://pypi.python.org/pypi/pygeoip/)
+* python [geoip2](https://pypi.python.org/pypi/geoip2/)
