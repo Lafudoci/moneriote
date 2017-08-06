@@ -181,8 +181,9 @@ def update_dns_records():
 
 
 def check_all_nodes():
-    print ('Checking existing nodes')
-    start_scanning_threads(currentNodes, get_blockchain_height())
+    if currentNodes.__len__() > 0:
+        print ('Checking existing nodes')
+        start_scanning_threads(currentNodes, get_blockchain_height())
     print ('Checking for new nodes')
     check_for_new_nodes()
     print ('Building DNS records')
