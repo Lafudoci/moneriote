@@ -1,5 +1,6 @@
+from functools import partial
+from multiprocessing import Pool, freeze_support
 from subprocess import Popen
-from threading import Thread
 from time import sleep
 
 import json
@@ -13,9 +14,10 @@ moneroDaemonAddr = '127.0.0.1'  # The IP address that the rpc server is listenin
 moneroDaemonPort = '18081'  # The port address that the rpc server is listening on
 moneroDaemonAuth = 'not:used'  # The username:password that the rpc server requires (if set) - has to be something
 
-acceptableBlockOffset = 2  # How much variance in the block height will be allowed
-scanInterval = 5  # 5 Minutes
-rpcPort = 18089  # This is the rpc server port that we'll check for
+maximumConcurrentScans = 16  # How many servers we should scan at once
+acceptableBlockOffset = 3  # How much variance in the block height will be allowed
+scanInterval = 15  # 15 Minutes
+rpcPort = 18081  # This is the rpc server port that we'll check for
 
 dnsApiZone = 'nodes.viaxmr.com.'  # the dns zone that we'll use
 dnsApiEnd = 'http://ns1.lchimp.com:8081/api/v1/servers/localhost/zones/'  # the zone's end point on the api server
@@ -78,15 +80,19 @@ def load_nodes():
 """
 
 
-def scan_node(address, accepted_height):
+def scan_node(accepted_height, address):
     try:
         req = requests.get('http://' + address + ':' + rpcPort.__str__() + '/getheight', timeout=5)
-    except:
+    except requests.exceptions.RequestException:
+        if address in currentNodes:
+            currentNodes.remove(address)
         return
 
     try:
         node_height_json = json.loads(req.text)
     except:
+        if address in currentNodes:
+            currentNodes.remove(address)
         return
 
     block_height_diff = int(node_height_json['height']) - accepted_height
@@ -100,37 +106,30 @@ def scan_node(address, accepted_height):
 
 
 """
+    Start threads checking known nodes to see if they're alive
+"""
+
+
+def start_scanning_threads(current_nodes, blockchain_height):
+    pool = Pool(processes=maximumConcurrentScans)
+    pool.map(partial(scan_node, blockchain_height), current_nodes)
+    pool.close()
+    pool.join()
+
+
+"""
     Start threads looking for new nodes
 """
 
 
 def check_for_new_nodes():
     new_nodes = load_nodes()
-    block_height = get_blockchain_height()
-    threads = [Thread(target=scan_node, args=(node, block_height)) for node in new_nodes]
 
-    # TODO: Don't hammer the CPU and network, make this so only 15-20 scans happen at once
-    for x in threads:
-        x.start()
+    for node in new_nodes:
+        if node in currentNodes:
+            new_nodes.pop(node)
 
-    for x in threads:
-        x.join()
-
-
-"""
-    Start threads checking our existing known nodes to see if they're still alive
-"""
-
-
-def check_existing_nodes():
-    blockchain_height = get_blockchain_height()
-    threads = [Thread(target=scan_node, args=(node, blockchain_height)) for node in currentNodes]
-
-    # TODO: Don't hammer the CPU and network, make this so only 15-20 scans happen at once
-    for x in threads:
-        x.start()
-    for x in threads:
-        x.join()
+    start_scanning_threads(new_nodes, get_blockchain_height())
 
 
 """
@@ -159,7 +158,7 @@ def update_dns_records():
     json_data = {
         "rrsets": [
             {
-                "name": "nodes.viaxmr.com.",
+                "name": dnsApiZone,
                 "type": "A",
                 "ttl": 60,
                 "changetype": "REPLACE",
@@ -171,7 +170,7 @@ def update_dns_records():
     for region, nodes in dns_geo_nodes.iteritems():
         json_data["rrsets"].append(
             {
-                "name": region + ".nodes.viaxmr.com.",
+                "name": "{}.{}".format(region, dnsApiZone),
                 "type": "A",
                 "ttl": 60,
                 "changetype": "REPLACE",
@@ -183,7 +182,7 @@ def update_dns_records():
 
 def check_all_nodes():
     print ('Checking existing nodes')
-    check_existing_nodes()
+    start_scanning_threads(currentNodes, get_blockchain_height())
     print ('Checking for new nodes')
     check_for_new_nodes()
     print ('Building DNS records')
@@ -192,6 +191,9 @@ def check_all_nodes():
     print ("We currently have {} nodes".format(currentNodes.__len__()))
 
 
-while True:
-    check_all_nodes()
-    sleep(scanInterval * 60)
+if __name__ == '__main__':
+    freeze_support()
+
+    while True:
+        check_all_nodes()
+        sleep(scanInterval * 60)
