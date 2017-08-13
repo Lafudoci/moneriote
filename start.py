@@ -69,7 +69,7 @@ def load_nodes():
         if match.group(1) == 'white':
             address = match.group(3)
 
-            if address not in currentNodes:
+            if address not in currentNodes and address != '0.0.0.0':
                 nodes.append(address)
 
     return nodes
@@ -95,7 +95,6 @@ def scan_node(accepted_height, address):
 
     # Check if the node we're checking is up to date (with a little buffer)
     if acceptableBlockOffset >= block_height_diff >= (acceptableBlockOffset * -1):
-        print ("Node {} has a block offset from us of {}".format(address, block_height_diff))
         return {'address': address, 'valid': True}
     else:
         return {'address': address, 'valid': False}
@@ -118,21 +117,6 @@ def start_scanning_threads(current_nodes, blockchain_height):
 
         if node['valid'] is False and node['address'] in currentNodes:
             currentNodes.remove(node['address'])
-
-
-"""
-    Start threads looking for new nodes
-"""
-
-
-def check_for_new_nodes():
-    new_nodes = load_nodes()
-
-    for node in new_nodes:
-        if node in currentNodes:
-            new_nodes.pop(node)
-
-    start_scanning_threads(new_nodes, get_blockchain_height())
 
 
 """
@@ -188,7 +172,7 @@ def check_all_nodes():
         print ('Checking existing nodes')
         start_scanning_threads(currentNodes, get_blockchain_height())
     print ('Checking for new nodes')
-    check_for_new_nodes()
+    start_scanning_threads(load_nodes(), get_blockchain_height())
     print ('Building DNS records')
     update_dns_records()
 
