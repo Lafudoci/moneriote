@@ -84,25 +84,21 @@ def scan_node(accepted_height, address):
     try:
         req = requests.get('http://' + address + ':' + rpcPort.__str__() + '/getheight', timeout=5)
     except requests.exceptions.RequestException:
-        if address in currentNodes:
-            currentNodes.remove(address)
-        return
+        return {'address': address, 'valid': False}
 
     try:
         node_height_json = json.loads(req.text)
     except:
-        if address in currentNodes:
-            currentNodes.remove(address)
-        return
+        return {'address': address, 'valid': False}
 
     block_height_diff = int(node_height_json['height']) - accepted_height
 
     # Check if the node we're checking is up to date (with a little buffer)
-    if (block_height_diff >= acceptableBlockOffset or block_height_diff <= (acceptableBlockOffset * -1)) \
-            and address in currentNodes:
-        currentNodes.remove(address)
-    elif address not in currentNodes:
-        currentNodes.append(address)
+    if acceptableBlockOffset >= block_height_diff >= (acceptableBlockOffset * -1):
+        print ("Node {} has a block offset from us of {}".format(address, block_height_diff))
+        return {'address': address, 'valid': True}
+    else:
+        return {'address': address, 'valid': False}
 
 
 """
@@ -112,9 +108,16 @@ def scan_node(accepted_height, address):
 
 def start_scanning_threads(current_nodes, blockchain_height):
     pool = Pool(processes=maximumConcurrentScans)
-    pool.map(partial(scan_node, blockchain_height), current_nodes)
+    response = pool.map(partial(scan_node, blockchain_height), current_nodes)
     pool.close()
     pool.join()
+
+    for node in response:
+        if node['valid'] is True and node['address'] not in currentNodes:
+            currentNodes.append(node['address'])
+
+        if node['valid'] is False and node['address'] in currentNodes:
+            currentNodes.remove(node['address'])
 
 
 """
